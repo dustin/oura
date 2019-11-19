@@ -1,0 +1,83 @@
+name:                oura
+version:             0.1.0.0
+github:              "dustin/oura"
+license:             BSD3
+author:              "Dustin Sallings"
+maintainer:          "dustin@spy.net"
+copyright:           "MIT"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/dustin/oura#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- lens
+- wreq
+- time
+- text
+- containers
+- generic-deriving
+- aeson
+- lens-aeson
+- bytestring
+- scientific
+- sqlite-simple
+- optparse-applicative
+
+library:
+  source-dirs: src
+  ghc-options:
+    - -Wall
+
+default-extensions:
+  - OverloadedStrings
+  - RecordWildCards
+  - NamedFieldPuns
+
+executables:
+  oura-auth:
+    main: OuraAuth.hs
+    source-dirs: app/auth
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - oura
+
+  oura:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wall
+    dependencies:
+    - oura
+
+tests:
+  oura-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - oura
+    - HUnit
+    - tasty
+    - tasty-hunit
+    - tasty-quickcheck

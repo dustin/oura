@@ -1,0 +1,5 @@
+.stack-work/
+oura.cabal
+*~
+auth.json
+/stack.yaml.lock
