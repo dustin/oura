@@ -5,22 +5,24 @@
 
 module Oura where
 
+import           Control.Concurrent.Async (Concurrently (..), runConcurrently)
 import           Control.Lens
-import           Data.Aeson             (FromJSON (..), Options (..),
-                                         ToJSON (..), defaultOptions,
-                                         fieldLabelModifier, genericParseJSON,
-                                         genericToEncoding)
-import qualified Data.ByteString.Char8  as BC
-import qualified Data.ByteString.Lazy   as BL
-import           Data.Maybe             (maybeToList)
-import qualified Data.Text              as T
-import           Data.Time.Calendar     (Day)
-import           Generics.Deriving.Base (Generic)
-import           Network.Wreq           (FormParam (..), Options, Response,
-                                         asJSON, customHistoriedMethodWith,
-                                         defaults, getWith, header, hrRedirects,
-                                         param, postWith, redirects,
-                                         responseBody, responseHeader)
+import           Data.Aeson               (FromJSON (..), Options (..),
+                                           ToJSON (..), defaultOptions,
+                                           fieldLabelModifier, genericParseJSON,
+                                           genericToEncoding)
+import qualified Data.ByteString.Char8    as BC
+import qualified Data.ByteString.Lazy     as BL
+import           Data.Maybe               (maybeToList)
+import qualified Data.Text                as T
+import           Data.Time.Calendar       (Day)
+import           Generics.Deriving.Base   (Generic)
+import           Network.Wreq             (FormParam (..), Options, Response,
+                                           asJSON, customHistoriedMethodWith,
+                                           defaults, getWith, header,
+                                           hrRedirects, param, postWith,
+                                           redirects, responseBody,
+                                           responseHeader)
 
 import           Oura.Types
 
@@ -121,3 +123,9 @@ activitySummaries = fetchAPI "activity" activity
 readinessSummaries :: AuthInfo -> Maybe Day -> Maybe Day -> IO [Readiness]
 readinessSummaries = fetchAPI "readiness" readiness
 
+fetchAll :: AuthInfo -> Maybe Day -> Maybe Day -> IO OuraData
+fetchAll ai start end = runConcurrently $ OuraData
+                        <$> Concurrently (Just <$> activitySummaries ai start end)
+                        <*> Concurrently (Just <$> readinessSummaries ai start end)
+                        <*> Concurrently (pure Nothing)
+                        <*> Concurrently (Just <$> sleepPeriods ai start end)

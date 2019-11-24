@@ -33,6 +33,10 @@ dependencies:
 - scientific
 - sqlite-simple
 - optparse-applicative
+- extra
+- influxdb
+- vector
+- async
 
 library:
   source-dirs: src

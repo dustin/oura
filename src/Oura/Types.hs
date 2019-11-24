@@ -18,7 +18,7 @@ data ActivityClass = NonWear
                    | LowIntensity
                    | MediumIntensity
                    | HighIntensity
-                   deriving (Show)
+                   deriving (Show, Enum, Bounded)
 
 charToClass :: Char -> ActivityClass
 charToClass '0' = NonWear
@@ -67,10 +67,6 @@ data Activity = Activity {
   , _activity_to_target_miles          :: Double
   , _activity_total                    :: Int
   } deriving (Generic, Show)
-
--- ouraFile <- BL.readFile "/Users/dsal/Downloads/oura_2019-11-17T05-14-10.json"
--- oura = eitherDecode ouraFile :: Either String OuraData
--- oura ^. _Right . activity . ix 1 . to activityClasses
 
 -- | Activity classes per 5 minutes from the given Activity.
 activityClasses :: Activity -> [(ZonedTime, ActivityClass)]
