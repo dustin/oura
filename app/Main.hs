@@ -65,9 +65,10 @@ processFile opts@Options{..} = do
 processLive :: Options -> IO  ()
 processLive opts@Options{..} = do
   ai <- loadAuthInfo optAuthPath optAccess optSecret
-  ts <- succ . utctDay <$> lastTimestamp (qParams opts)
+  ts <- utctDay <$> lastTimestamp (qParams opts)
   putStrLn ("Fetching since: " <> show ts)
   oura <- fetchAll ai (Just ts) Nothing
+  print $ oura ^.. sleep . _Just . folded . sleep_summary_date
   let tags = Map.singleton "user" optUser
   storeLines (wParams opts) (allLines tags oura)
 
