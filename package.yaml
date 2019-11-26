@@ -70,6 +70,8 @@ executables:
       - -Wall
     dependencies:
     - oura
+    - mtl
+    - transformers
 
 tests:
   oura-test:

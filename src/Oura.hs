@@ -7,6 +7,7 @@ module Oura where
 
 import           Control.Concurrent.Async (Concurrently (..), runConcurrently)
 import           Control.Lens
+import           Control.Monad.IO.Class   (MonadIO (..))
 import           Data.Aeson               (FromJSON (..), Options (..),
                                            ToJSON (..), defaultOptions,
                                            fieldLabelModifier, genericParseJSON,
@@ -73,58 +74,58 @@ instance FromJSON AuthResponse where
 instance ToJSON AuthResponse where
   toEncoding = genericToEncoding jsonOpts
 
-authenticateURL :: AuthInfo -> IO (Maybe String)
+authenticateURL :: MonadIO m => AuthInfo -> m (Maybe String)
 authenticateURL AuthInfo{..} = do
   let opts = defOpts & redirects .~ 1
                      & param "response_type" .~ ["code"]
                      & param "redirect_uri" .~ [T.pack redirectURI]
                      & param "client_id" .~ [T.pack _clientID]
-  r <- customHistoriedMethodWith "GET" opts authURL
+  r <- liftIO $ customHistoriedMethodWith "GET" opts authURL
   pure $ (baseURL <>) <$> r ^? hrRedirects . folded . _2 . responseHeader "Location" . to BC.unpack
 
 
-authToken :: BL.ByteString -> AuthInfo -> IO AuthResponse
+authToken :: MonadIO m => BL.ByteString -> AuthInfo -> m AuthResponse
 authToken tok AuthInfo{..} = do
-  r <- asJSON =<< postWith defOpts tokenURL [
-    "grant_type" := ("authorization_code" :: String),
-    "code" := tok,
-    "redirect_uri" := redirectURI,
-    "client_id" := _clientID,
-    "client_secret" := _clientSecret] :: IO (Response AuthResponse)
+  r <- liftIO (asJSON =<< postWith defOpts tokenURL [
+                  "grant_type" := ("authorization_code" :: String),
+                  "code" := tok,
+                  "redirect_uri" := redirectURI,
+                  "client_id" := _clientID,
+                  "client_secret" := _clientSecret] :: IO (Response AuthResponse))
   pure $ r ^. responseBody
 
-refreshAuth :: AuthInfo -> AuthResponse -> IO AuthResponse
+refreshAuth :: MonadIO m => AuthInfo -> AuthResponse -> m AuthResponse
 refreshAuth AuthInfo{..} AuthResponse{..} = do
-  r <- asJSON =<< postWith defOpts tokenURL [
-    "grant_type" := ("refresh_token" :: String),
-    "client_id" := _clientID,
-    "client_secret" := _clientSecret,
-    "refresh_token" := _refresh_token] :: IO (Response AuthResponse)
+  r <- liftIO (asJSON =<< postWith defOpts tokenURL [
+                  "grant_type" := ("refresh_token" :: String),
+                  "client_id" := _clientID,
+                  "client_secret" := _clientSecret,
+                  "refresh_token" := _refresh_token] :: IO (Response AuthResponse))
   pure $ r ^. responseBody
 
 authOpts :: AuthInfo -> Network.Wreq.Options
 authOpts AuthInfo{..} = defOpts & header "Authorization" .~ ["Bearer " <> BC.pack _bearerToken]
 
-fetchAPI :: Monoid a => String -> Lens' OuraData (Maybe a) -> AuthInfo -> Maybe Day -> Maybe Day -> IO a
+fetchAPI :: (MonadIO m, Monoid a) => String -> Lens' OuraData (Maybe a) -> AuthInfo -> Maybe Day -> Maybe Day -> m a
 fetchAPI u l ai start end = do
   let opts = authOpts ai & param "start" .~ dp start
                          & param "end" .~ dp end
-  r <- asJSON =<< getWith opts (apiBase <> u) :: IO (Response OuraData)
+  r <- liftIO (asJSON =<< getWith opts (apiBase <> u) :: IO (Response OuraData))
   pure $ r ^. responseBody . l . _Just
 
     where dp d = T.pack . show <$> maybeToList d
 
-sleepPeriods :: AuthInfo -> Maybe Day -> Maybe Day -> IO [Sleep]
+sleepPeriods :: MonadIO m => AuthInfo -> Maybe Day -> Maybe Day -> m [Sleep]
 sleepPeriods = fetchAPI "sleep" sleep
 
-activitySummaries :: AuthInfo -> Maybe Day -> Maybe Day -> IO [Activity]
+activitySummaries :: MonadIO m => AuthInfo -> Maybe Day -> Maybe Day -> m [Activity]
 activitySummaries = fetchAPI "activity" activity
 
-readinessSummaries :: AuthInfo -> Maybe Day -> Maybe Day -> IO [Readiness]
+readinessSummaries :: MonadIO m => AuthInfo -> Maybe Day -> Maybe Day -> m [Readiness]
 readinessSummaries = fetchAPI "readiness" readiness
 
-fetchAll :: AuthInfo -> Maybe Day -> Maybe Day -> IO OuraData
-fetchAll ai start end = runConcurrently $ OuraData
+fetchAll :: MonadIO m => AuthInfo -> Maybe Day -> Maybe Day -> m OuraData
+fetchAll ai start end = liftIO $ runConcurrently $ OuraData
                         <$> Concurrently (Just <$> activitySummaries ai start end)
                         <*> Concurrently (Just <$> readinessSummaries ai start end)
                         <*> Concurrently (pure Nothing)

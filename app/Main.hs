@@ -4,25 +4,31 @@
 module Main where
 
 import           Control.Lens
-import           Data.Aeson           (eitherDecode)
-import qualified Data.ByteString.Lazy as BL
-import           Data.List.Extra      (chunksOf)
-import qualified Data.Map.Strict      as Map
-import           Data.String          (fromString)
-import           Data.Text            (Text)
-import           Data.Time.Clock      (UTCTime (..))
-import           Database.InfluxDB    (Key, Line (..), Precision (Second),
-                                       QueryParams, WriteParams, host,
-                                       precision, queryParams, server,
-                                       writeBatch, writeParams)
-import           Options.Applicative  (Parser, execParser, fullDesc, help,
-                                       helper, info, long, progDesc,
-                                       showDefault, strOption, value, (<**>))
+import           Control.Monad.IO.Class (MonadIO (..))
+import           Control.Monad.Reader   (ReaderT (..), asks, runReaderT)
+import           Data.Aeson             (eitherDecode)
+import qualified Data.ByteString.Lazy   as BL
+import           Data.List.Extra        (chunksOf)
+import qualified Data.Map.Strict        as Map
+import           Data.String            (fromString)
+import           Data.Text              (Text)
+import           Data.Time.Clock        (UTCTime (..))
+import           Database.InfluxDB      (Key, Line (..), Precision (Second),
+                                         host, precision, queryParams, server,
+                                         writeBatch, writeParams)
+import           Database.InfluxDB.Line (tagSet)
+import           Options.Applicative    (Parser, execParser, fullDesc, help,
+                                         helper, info, long, progDesc,
+                                         showDefault, strOption, value, (<**>))
 
 import           Oura
 import           Oura.Auth
 import           Oura.Influx
 import           Oura.Types
+
+newtype Env = Env { opts :: Options }
+
+type Processor = ReaderT Env IO
 
 data Options = Options {
   optInfluxDBHost :: Text
@@ -44,38 +50,37 @@ options = Options
   <*> strOption (long "access_secret" <> value "" <> help "access secret")
   <*> strOption (long "user" <> value "" <> help "user tag")
 
-storeLines :: WriteParams -> [Line UTCTime] -> IO ()
-storeLines wp ls = mapM_ (writeBatch wp) $ chunksOf 1000 ls
+storeLines :: [Line UTCTime] -> Processor ()
+storeLines ls = do
+  Options{optInfluxDB,optInfluxDBHost} <- asks opts
+  u <- asks (optUser . opts)
+  let wp = writeParams (fromString optInfluxDB) & server.host .~ optInfluxDBHost & precision .~ Second
+      ls' = ls & traversed . tagSet %~ Map.insert "user" u
+  liftIO $ mapM_ (writeBatch wp) $ chunksOf 2000 ls'
 
-qParams :: Options -> QueryParams
-qParams Options{..} = queryParams (fromString optInfluxDB) & server.host .~ optInfluxDBHost
-
-wParams :: Options -> WriteParams
-wParams Options{..} = writeParams (fromString optInfluxDB) & server.host .~ optInfluxDBHost & precision .~ Second
-
-processFile :: Options -> IO ()
-processFile opts@Options{..} = do
-  ouraFile <- BL.readFile optDumpPath
+processFile :: Processor ()
+processFile = do
+  Options{..} <- asks opts
+  ouraFile <- liftIO $ BL.readFile optDumpPath
   let oura = eitherDecode ouraFile :: Either String OuraData
-      tags = Map.singleton "user" optUser
-      ls = either fail (allLines tags) oura
+      ls = either fail (allLines mempty) oura
 
-  storeLines (wParams opts) ls
+  storeLines ls
 
-processLive :: Options -> IO  ()
-processLive opts@Options{..} = do
+processLive :: Processor ()
+processLive = do
+  Options{..} <- asks opts
+  let qp = queryParams (fromString optInfluxDB) & server.host .~ optInfluxDBHost
   ai <- loadAuthInfo optAuthPath optAccess optSecret
-  ts <- utctDay <$> lastTimestamp (qParams opts)
-  putStrLn ("Fetching since: " <> show ts)
+  ts <- utctDay <$> lastTimestamp qp
+  (liftIO.putStrLn) ("Fetching since: " <> show ts)
   oura <- fetchAll ai (Just ts) Nothing
-  print $ oura ^.. sleep . _Just . folded . sleep_summary_date
-  let tags = Map.singleton "user" optUser
-  storeLines (wParams opts) (allLines tags oura)
-
-run :: Options -> IO ()
-run opts@Options{optDumpPath=""} = processLive opts
-run opts                         = processFile opts
+  (liftIO.print) $ oura ^.. sleep . _Just . folded . sleep_summary_date
+  storeLines (allLines mempty oura)
 
 main :: IO ()
-main = run =<< execParser opts
-  where opts = info (options <**> helper) (fullDesc <> progDesc "Influx oura")
+main = runReaderT run =<< Env <$> execParser o
+  where o = info (options <**> helper) (fullDesc <> progDesc "Influx oura")
+        run = do -- processFile <|> processLive
+          f <- asks (optDumpPath . opts)
+          if f == "" then processLive else processFile
