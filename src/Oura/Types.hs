@@ -6,6 +6,7 @@ module Oura.Types where
 
 import           Control.Lens
 import           Data.Aeson
+import           Data.Maybe          (fromMaybe)
 import           Data.Time.Calendar  (Day)
 import           Data.Time.Clock     (NominalDiffTime, addUTCTime)
 import           Data.Time.LocalTime (ZonedTime (..), utcToZonedTime,
@@ -140,9 +141,9 @@ data Sleep = Sleep {
   , _sleep_deep                  :: Int
   , _sleep_duration              :: Int
   , _sleep_efficiency            :: Int
-  , _sleep_hr_5min               :: [Int]
-  , _sleep_hr_average            :: Double
-  , _sleep_hr_lowest             :: Int
+  , _sleep_hr_5min               :: Maybe [Int]
+  , _sleep_hr_average            :: Maybe Double
+  , _sleep_hr_lowest             :: Maybe Int
   , _sleep_hypnogram_5min        :: String
   , _sleep_is_longest            :: Int
   , _sleep_light                 :: Int
@@ -153,7 +154,7 @@ data Sleep = Sleep {
   , _sleep_rem                   :: Int
   , _sleep_restless              :: Int
   , _sleep_rmssd                 :: Maybe Int
-  , _sleep_rmssd_5min            :: [Int]
+  , _sleep_rmssd_5min            :: Maybe [Int]
   , _sleep_score                 :: Int
   , _sleep_score_alignment       :: Int
   , _sleep_score_deep            :: Int
@@ -163,8 +164,8 @@ data Sleep = Sleep {
   , _sleep_score_rem             :: Int
   , _sleep_score_total           :: Int
   , _sleep_summary_date          :: Day
-  , _sleep_temperature_delta     :: Double
-  , _sleep_temperature_deviation :: Double
+  , _sleep_temperature_delta     :: Maybe Double
+  , _sleep_temperature_deviation :: Maybe Double
   , _sleep_timezone              :: Int
   , _sleep_total                 :: Int
   } deriving (Generic, Show)
@@ -173,14 +174,14 @@ data Sleep = Sleep {
 -- period, the first period starting from sleep.bedtime_start.
 sleepHR :: Sleep -> [(ZonedTime, Int)]
 sleepHR Sleep{_sleep_bedtime_start, _sleep_hr_5min} =
-  zip (windows _sleep_bedtime_start 300) _sleep_hr_5min
+  zip (windows _sleep_bedtime_start 300) (fromMaybe [] _sleep_hr_5min)
 
 -- The average HRV (calculated using rMSSD method) for each beginning
 -- 5 minutes of the sleep period, the first period starting from
 -- sleep.bedtime_start.
 sleepRMSSD :: Sleep -> [(ZonedTime, Int)]
 sleepRMSSD Sleep{_sleep_bedtime_start, _sleep_rmssd_5min} =
-  zip (windows _sleep_bedtime_start 300) _sleep_rmssd_5min
+  zip (windows _sleep_bedtime_start 300) (fromMaybe [] _sleep_rmssd_5min)
 
 data SleepPhase = Deep | Light | REM | Awake deriving(Enum, Show)
 
