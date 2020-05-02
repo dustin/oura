@@ -5,17 +5,16 @@
 module Oura.Influx (allLines, sleepLines, readinessLines, activityLines,
                    lastTimestamp) where
 
-import           Control.Lens            ((^.), _Just)
-import           Control.Monad           (when)
-import           Control.Monad.IO.Class  (MonadIO (..))
-import           Data.Map.Strict         (Map)
-import qualified Data.Map.Strict         as Map
-import           Data.Time.Calendar      (Day)
-import           Data.Time.Clock         (UTCTime (..))
-import           Data.Time.LocalTime     (ZonedTime, zonedTimeToUTC)
-import qualified Data.Vector             as V
+import           Control.Lens           ((^.), _Just)
+import           Control.Monad          (when)
+import           Control.Monad.IO.Class (MonadIO (..))
+import           Data.Map.Strict        (Map)
+import qualified Data.Map.Strict        as Map
+import           Data.Time.Calendar     (Day)
+import           Data.Time.Clock        (UTCTime (..))
+import           Data.Time.LocalTime    (ZonedTime, zonedTimeToUTC)
+import qualified Data.Vector            as V
 import           Database.InfluxDB
-import           Database.InfluxDB.Types (Key (..))
 
 import           Oura.Types
 
@@ -103,7 +102,7 @@ instance QueryResults TSOnly where
   parseResults prec = parseResultsWithDecoder strictDecoder $ \_ _ columns fields ->
     TSOnly <$> (getField "time" columns fields >>= parseUTCTime prec)
 
-lastTimestamp :: MonadIO m => QueryParams -> m UTCTime
+lastTimestamp :: (MonadFail m, MonadIO m) => QueryParams -> m UTCTime
 lastTimestamp p = do
   r <- liftIO (query p "select last(total)  from sleep" :: IO (V.Vector TSOnly))
   when (null r) $ fail "no results returned"
